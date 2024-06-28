@@ -3,7 +3,11 @@ import re
 import csv
 import pandas as pd
 import faulthandler
-faulthandler.enable()
+
+# 先格式化SQL语句，替换指定表名和符号，然后执行SQL，并记录执行结果
+# 如果执行失败，则尝试使用相似的表名，并执行SQL
+
+faulthandler.enable() # 启用错误处理器，在程序崩溃时打印出 Python 的回溯信息（traceback）
 term_list_1 = ['基金股票持仓明细','基金债券持仓明细','基金可转债持仓明细']
 conn = sqlite3.connect('/tcdata/bs_challenge_financial_14b_dataset/dataset/博金杯比赛数据.db')
 cs = conn.cursor()
@@ -20,7 +24,7 @@ for cyc in range(1000):
     SQL_exe_flag = 0
     Use_similar_table_flag = 0
     SQL_exe_result = 'N_A'
-    temp_sql = new_question_file[cyc:cyc+1]['SQL语句'][cyc]
+    temp_sql = new_question_file[cyc:cyc+1]['SQL语句'][cyc] # 处理sql语句，替换指定文字
     temp_sql = temp_sql.replace("B股票日行情表",'A股票日行情表')   
     temp_sql = temp_sql.replace("创业板日行情表",'A股票日行情表')   
     if " 股票日行情表" in temp_sql:
@@ -37,7 +41,7 @@ for cyc in range(1000):
         origin_success_flag = 1
     except:
         for item in term_list_1:
-            if item in temp_sql:
+            if item in temp_sql: # 如果sql中出现指定表名
                 Use_similar_table_flag = 1
                 original_item = item
                 break

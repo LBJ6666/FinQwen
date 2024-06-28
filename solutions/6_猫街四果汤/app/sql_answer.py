@@ -63,6 +63,12 @@ def error_handle_prompt(e, last_response, question, sample, num):
 
 def get_answer(question: dict, model, tokenizer, sample_template):
     def query_db(query, done_event):
+        '''
+
+        :param query: SQL
+        :param done_event: event对象
+        :return:
+        '''
         try:
             conn = sqlite3.connect(os.path.join(work_dir,"app/bojin.db"))
             cursor = conn.cursor()
@@ -78,7 +84,7 @@ def get_answer(question: dict, model, tokenizer, sample_template):
             for row in results:
                 row_data = {}
                 for idx, value in enumerate(row):
-                    row_data[columns[idx]] = value
+                    row_data[columns[idx]] = value # 保存SQL查询结果，key是列名，value是值
                 formatted_results.append(row_data)
 
             result_container["results"] = formatted_results
@@ -99,7 +105,7 @@ def get_answer(question: dict, model, tokenizer, sample_template):
         thread.start()
 
         thread.join(120)
-        if thread.is_alive():
+        if thread.is_alive(): #如果线程还在运行，说明超时
 
             raise ValueError('SQL execute timeout')
         else:
@@ -110,9 +116,9 @@ def get_answer(question: dict, model, tokenizer, sample_template):
                 results = result_container.get("results", [])
             return results
 
-    s = difflib.get_close_matches(question['question'], sample_template.keys(), n=2, cutoff=0.10)
+    s = difflib.get_close_matches(question['question'], sample_template.keys(), n=2, cutoff=0.10) # 选出相似的问题
     sample_info = '\n'.join([f'{i}. 问题:`{v}`, SQL语句:`{sample_template[v]}`。' for i, v in enumerate(s)])
-    if sample_info == '':
+    if sample_info == '': # 如果没有相似例子
         prompt = '''现在请你充当数据库问题的专家角色，将问题翻译为标准的SQL语句。请只使用以下表格的表格名和列名生成SQL语句，SQL表格信息是：{}。
     请直接生成能在以下数据库中执行成功的SQL代码，不要有其他解释，问题：`{}`，SQL语句:'''
         response, history = model.chat(tokenizer, prompt.format(db.table_info, question['question']), history=None,
@@ -132,7 +138,7 @@ def get_answer(question: dict, model, tokenizer, sample_template):
     sql_error = None
     i = 0
     while True:
-        if i > 3:
+        if i > 3: # 3次重试
             question['sql_error'] = sql_error
             break
         try:
@@ -146,7 +152,7 @@ def get_answer(question: dict, model, tokenizer, sample_template):
 
             sql = re.findall(r'.*?(SELECT .*?)(?:`|$|。|;)', response, re.DOTALL)
             result_container = {}
-            result = run_thread(sql[0])
+            result = run_thread(sql[0]) # 查询数据库，返回查询结果
             question['sql_return'] = result
             prompt = '''请你把问题和答案组成一个完整的回答，回答要简洁但完整，
                         例如："景顺长城中短债债券C基金在20210331的季报里，前三大持仓占比的债券名称是什么?"，需要回答："景顺长城中短债债券C在20210331的季报中，前三大持仓占比的债券名称分别是21国开01、20农发清发01、20国信03。"。
@@ -191,7 +197,7 @@ def sql_solution(fpath):
     answer = []
     i = 0
     for n in ques:
-        if not re.search(r'(?:股票|基金|A股|港股)', n['question']):
+        if not re.search(r'(?:股票|基金|A股|港股)', n['question']): # 是否包含 "股票"、"基金"、"A股" 或 "港股" 中的任何一个。如果没有则跳过
             continue
         i += 1
         print(n['id'])
@@ -202,7 +208,7 @@ def sql_solution(fpath):
     i = 0
     for q in answer:
         if 'answer' in q:
-            to_answer[q['id']]['answer'] = q['answer']
+            to_answer[q['id']]['answer'] = q['answer'] # LLM根据SQL查询结果回答的答案
             i += 1
-        to_answer[q['id']]['model_return'] = q['model_return']
+        to_answer[q['id']]['model_return'] = q['model_return'] # LLM回答的SQL语句
     write_jsonl(fpath, to_answer)

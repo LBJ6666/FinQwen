@@ -1,15 +1,20 @@
 import json
 import csv
 import pandas as pd
-import copy 
+import copy
 n1 = 20
 n2 = 20
 num_of_answer = 10
 
-csv_file_dir = '/app/intermediate/AB01_question_with_related_text_ot_normalized.csv'
+# 根据资料数据作为prompt让LLM去回答，最多生成10个答案
+
+# '问题id','问题','对应实体','csv文件名','top_n_pages_index','top_n_pages_similarity','top_n_pages'
+# '问题id','问题','对应实体','csv文件名','最相似的文本索引','最相似的文本得分','最相似的句子'
+csv_file_dir = '/app/intermediate/AB01_question_with_related_text_ot_normalized.csv' # 不带表格信息
 q_file =  pd.read_csv(csv_file_dir,delimiter = ",",header = 0)
 
-csv_file_dir_2 = '/app/intermediate/AB01_question_with_related_text_rp.csv'
+# '问题id','问题','对应实体','csv文件名','top_n_pages_index','top_n_pages_similarity','top_n_pages'
+csv_file_dir_2 = '/app/intermediate/AB01_question_with_related_text_rp.csv' # 带表格信息
 q_file_2 =  pd.read_csv(csv_file_dir_2,delimiter = ",",header = 0)
 
 unknown_words = ["不知道","无法直接","无法确定","没有找到",'未知','与问题无关','无法直接得出','没有具体说明',
@@ -32,6 +37,12 @@ model = AutoModelForCausalLM.from_pretrained(model_dir, device_map="cuda:0", tru
 model.generation_config = GenerationConfig.from_pretrained(model_dir, trust_remote_code=True, temperature = 0.01, top_p = 1, seed = 1234)
 
 def answer_generator(piece_list,n,m):
+    '''
+
+    :param piece_list: 资料列表
+    :param n: 回答次数
+    :param m: 最多答案数
+    '''
     temp_index = 0
     return_response_list = list()
 
@@ -48,29 +59,29 @@ def answer_generator(piece_list,n,m):
         temp_index = temp_index + 1
 
         prompt = prompt + '资料' + '：' + next_piece
-        prompt = prompt + ' \n 问题：' + temp_q 
+        prompt = prompt + ' \n 问题：' + temp_q
 
         response, history = model.chat(tokenizer, prompt, history=None)
 
         response = response.replace('\n','')
         #response = response.replace(' ','')
 
-	
+
         add_flag = 1
         if len(response) <500:
             for word in unknown_words:
-                if word in response:
+                if word in response: # 如果出现不知道意思的token
                     add_flag = 0
 
-        if add_flag == 1 and response not in return_response_list:
+        if add_flag == 1 and response not in return_response_list: # 如果回答成功，并且答案之前没有回答过
             return_response_list.append(response)
 
-        if len(return_response_list) >= m:
+        if len(return_response_list) >= m: # 如果回答数量超出最大答案数20.则返回
             break
     return return_response_list
 
 
-g = open('/app/intermediate/FA_V5_Text_cap4_4_nt.csv', 'w', newline='', encoding = 'utf-8-sig') 
+g = open('/app/intermediate/FA_V5_Text_cap4_4_nt.csv', 'w', newline='', encoding = 'utf-8-sig')
 csvwriter = csv.writer(g)
 csvwriter.writerow(['问题id','问题','实体答案','final_ans1','ans_list'])
 
@@ -83,32 +94,32 @@ for cyc in range(0,1000):
     temp_q = q_file[cyc:(cyc+1)]['问题'][cyc]
     response_list = list()
     if entity_name != 'N_A':
-        
+
         temp_pdf_pieces = eval(q_file[cyc:cyc+1]['top_n_pages'][cyc])
-        
-        
+
+
         temp_index = 0
-        
+
         response_list = answer_generator(temp_pdf_pieces,n1,num_of_answer)
 
-        if len(response_list) <= 7:
+        if len(response_list) <= 7: # 如果回答的答案个数小于7，拿资料2的信息（带表格数据）去继续回答
             response_list_2 = list()
             temp_pdf_pieces_2 = eval(q_file_2[cyc:cyc+1]['top_n_pages'][cyc])
             response_list_2 = answer_generator(temp_pdf_pieces_2,n2,num_of_answer-len(response_list))
             for resp in response_list_2:
-                response_list.append(resp)       
+                response_list.append(resp)
 
-        
-        
+
+
         answer = ""
         for resp in response_list:
             answer = answer + resp + '\n'
 
-            
+
     csvwriter.writerow([q_file[cyc:(cyc+1)]['问题id'][cyc],
                         temp_q,
                         entity_name,
                         answer,str(response_list)])
-    
+
 g.close()
 exit()

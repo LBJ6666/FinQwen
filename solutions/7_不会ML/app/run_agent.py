@@ -208,7 +208,7 @@ class agent:
             
 def main():
     parser = argparse.ArgumentParser(description="Run Agent")
-    parser.add_argument("--use_api", action = 'store_true', default=False)
+    parser.add_argument("--use_api", action = 'j', default=False)
     parser.add_argument("--api_name", type=str, default='qwen')
     parser.add_argument("--top_k", type=int, default=15)
     parser.add_argument("--parent_chunk_size", type=int, default=800)

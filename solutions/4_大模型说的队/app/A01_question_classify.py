@@ -5,31 +5,33 @@ import re
 from modelscope import AutoModelForCausalLM, AutoTokenizer, snapshot_download
 from modelscope import GenerationConfig
 
+# A01：用LLM对问题分类，分为SQL股票数据库任务还是text招股说明书检索任务
+
 model_dir = '/tcdata/models/Tongyi-Finance-14B-Chat'
 
 # Note: The default behavior now has injection attack prevention off.
 tokenizer = AutoTokenizer.from_pretrained(model_dir, trust_remote_code=True)
 
 new_question_file_dir = '/app/intermediate/question_csv.csv'
-new_question_file = pd.read_csv(new_question_file_dir,delimiter = ",",header = 0)
+new_question_file = pd.read_csv(new_question_file_dir, delimiter=",", header=0)
 company_file_dir = '/app/data/files/AF0_pdf_to_company.csv'
-company_file = pd.read_csv(company_file_dir,delimiter = ",",header = 0)
+company_file = pd.read_csv(company_file_dir, delimiter=",", header=0)
 company_list = list()
-for cyc in range(len(company_file)):
-    company_list.append(company_file[cyc:cyc+1]['公司名称'][cyc])
+for cyc in range(len(company_file)):  # 得到公司列表
+    company_list.append(company_file[cyc:cyc + 1]['公司名称'][cyc])
 model = AutoModelForCausalLM.from_pretrained(model_dir, device_map="cuda:0", trust_remote_code=True, bf16=True).eval()
 model.generation_config = GenerationConfig.from_pretrained(model_dir,
                                                            trust_remote_code=True,
-                                                           temperature = 0.0000001,
-                                                           top_p = 1,
-                                                           do_sample = False,
-                                                           seed = 1234)
+                                                           temperature=0.0000001,
+                                                           top_p=1,
+                                                           do_sample=False,
+                                                           seed=1234)
 
 print('A01_model_loaded')
 
-g = open('/app/intermediate/A01_question_classify.csv', 'w', newline='', encoding = 'utf-8-sig') 
+g = open('/app/intermediate/A01_question_classify.csv', 'w', newline='', encoding='utf-8-sig')
 csvwriter = csv.writer(g)
-csvwriter.writerow(['问题id','问题','答案','分类'])
+csvwriter.writerow(['问题id', '问题', '答案', '分类'])
 prompt = """
     你是一个问题分类器。对于每个提供给你的问题，你需要猜测答案是在该公司的招股说明书中还是在基金股票数据库里。以下是一些例子：
 
@@ -103,13 +105,13 @@ prompt = """
     问题：“
     """
 for cyc in range(len(new_question_file)):
-    temp_question = new_question_file[cyc:cyc+1]['问题'][cyc]
+    temp_question = new_question_file[cyc:cyc + 1]['问题'][cyc]
 
-    prompt1 = prompt + temp_question + """？"""
+    prompt1 = prompt + temp_question + """？"""  # 把prompt和每个问题拼接成新的prompt，让llm去分类
 
     response_new, history_new = model.chat(tokenizer, prompt1, history=None)
     if cyc % 100 == 0:
-        print(str(new_question_file[cyc:(cyc+1)]['问题id'][cyc]))
+        print(str(new_question_file[cyc:(cyc + 1)]['问题id'][cyc]))
 
     if '招股说明书' in response_new and '股票数据库' not in response_new:
         temp_class = 'Text'
@@ -121,17 +123,14 @@ for cyc in range(len(new_question_file)):
     else:
         temp_class = 'SQL'
         for company_name in company_list:
-            if company_name in temp_question:
+            if company_name in temp_question:  # 如果公司名称出现在问题里面，则为检索任务
                 temp_class = 'Text'
-    if cyc in [166,174]:
+    if cyc in [166, 174]:  # 这2个特殊问题分为检索任务
         temp_calss = 'Text'
 
-
-    csvwriter.writerow([str(new_question_file[cyc:(cyc+1)]['问题id'][cyc]),
-                    str(new_question_file[cyc:(cyc+1)]['问题'][cyc]),
-                    response_new,temp_class])
+    csvwriter.writerow([str(new_question_file[cyc:(cyc + 1)]['问题id'][cyc]),
+                        str(new_question_file[cyc:(cyc + 1)]['问题'][cyc]),
+                        response_new, temp_class])
 g.close()
-
-
 
 exit()

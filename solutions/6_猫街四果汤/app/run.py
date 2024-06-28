@@ -5,6 +5,18 @@ from modelscope import GenerationConfig
 import time
 import argparse
 
+# 使用SQL回答：
+# - 根据问题+SQL的例子，提取于问题最相似的问题，让LLM生成SQL语句
+# - 如果执行错误，让LLM去修改SQL语句或用sql_metadata.Parser解析得到表信息，再去让LLM生成SQL
+# - 根据SQL执行结果，让LLM回答问题
+
+# 使用文本检索回答：
+# - 提取CSV文档中出现的公司名和CSV文本切片
+# - 找到和问题相似度最高的公司名，得到该CSV文档
+# - 让LLM提取问题中的公司名，再把问题中的公司名删除
+# - 计算问题和相似文档的IF-IDF得分，得到于问题最相似的，前20个文档片段的内容
+# - 让LLM根据这些文本判断回答问题
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_dir', type=str, default="/tcdata", help='data and model directory path')
 parser.add_argument('--model_name', type=str, default="Tongyi-Finance-14B-Chat", help='llm model choice')
@@ -56,19 +68,19 @@ def model_test(model_dir, query="请解释一下资产负债率"):
 
 def generate_answer(questions):
     # 选手需替换成各自的解决方案
-    from sql_answer_new import sql_solution
+    from sql_answer import sql_solution
     from text_answer import text_solution
-    sql_solution('sql.jsonl')
-    text_solution('text.jsonl')
+    sql_solution('sql.jsonl') # 执行SQL查询任务，包含answer：LLM根据SQL查询结果回答的答案。model_return：LLM回答的SQL语句
+    text_solution('text.jsonl') # 执行text检索任务，包含answer：LLM根据资料文件的回答
     sql = read_jsonl('sql.jsonl')
     text = read_jsonl('text.jsonl')
     #to_answer = read_jsonl('bs_challenge_financial_14b_dataset/question.json')
     for q in questions:
-        if 'answer' in sql[q['id']]:
+        if 'answer' in sql[q['id']]: # 如果SQL查询有答案，则用SQL结果作为答案
             q['answer'] = sql[q['id']]['answer']
-        elif 'answer' in text[q['id']]:
+        elif 'answer' in text[q['id']]: # 如果SQL查询没有答案，则用资料文件答案作为答案
             q['answer'] = text[q['id']]['answer']
-        else:
+        else: # 如果SQL查询和资料文件都没有答案，则用无法回答问题作为答案
             q['answer'] = '无法回答问题`{}`'.format(q['question'])
     #write_jsonl('submission.jsonl', to_answer)
 

@@ -8,10 +8,12 @@ import re
 from collections import Counter
 import math
 
+# 根据问题的token和对于公司介绍的CSV文件中每一行的token，计算相似度，找到与问题最相似的片段和表格
+
 pattern1 = r'截至'
 pattern2 = r'\d{1,4}年\d{1,2}月\d{1,2}日'
 
-q_file_dir = '/app/intermediate/A02_question_classify_entity.csv'
+q_file_dir = '/app/intermediate/A02_question_classify_entity.csv' # '问题id', '问题', '分类', '对应实体', 'csv文件名'
 q_file =  pd.read_csv(q_file_dir,delimiter = ",",header = 0)
 
 
@@ -48,8 +50,8 @@ print('C02_Started')
 for cyc in range(1000):
     temp_q = q_file[cyc:cyc+1]['问题'][cyc]
     
-    str1_list = re.findall(pattern1,temp_q)
-    str2_list = re.findall(pattern2,temp_q)
+    str1_list = re.findall(pattern1,temp_q) # 匹配问题中出现的“截至”
+    str2_list = re.findall(pattern2,temp_q) # 匹配问题中的日期
     
  
         
@@ -80,16 +82,16 @@ for cyc in range(1000):
             temp_q_tokens_add = tokenizer(word)
             temp_q_tokens_add = temp_q_tokens_add['input_ids']
             for word_add in temp_q_tokens_add:
-                temp_q_tokens.append(word_add)
+                temp_q_tokens.append(word_add) # 问题的Token
 
         C_temp_q_tokens = Counter(temp_q_tokens)
         list_sim = list()
-        for cyc2 in range(len(company_csv)):
+        for cyc2 in range(len(company_csv)): # 遍历公司介绍文件中的每一行
             temp_sim = 0
             temp_file_piece = ''
-            if company_csv[cyc2:cyc2+1]['纯文本'][cyc2] == company_csv[cyc2:cyc2+1]['纯文本'][cyc2]:
+            if company_csv[cyc2:cyc2+1]['纯文本'][cyc2] == company_csv[cyc2:cyc2+1]['纯文本'][cyc2]: # 得到纯文本信息
                 temp_file_piece = company_csv[cyc2:cyc2+1]['纯文本'][cyc2]
-            if company_csv[cyc2:cyc2+1]['表格'][cyc2] == company_csv[cyc2:cyc2+1]['表格'][cyc2]:
+            if company_csv[cyc2:cyc2+1]['表格'][cyc2] == company_csv[cyc2:cyc2+1]['表格'][cyc2]: # 拼接表格信息
                 temp_file_piece = temp_file_piece + company_csv[cyc2:cyc2+1]['表格'][cyc2].replace('None'," ")
             
             for bd in bd_list:
@@ -102,13 +104,13 @@ for cyc in range(1000):
             C_temp_s_tokens['220'] = 0
             
             for token in C_temp_s_tokens:
-                if C_temp_s_tokens[token] >= cap:
+                if C_temp_s_tokens[token] >= cap: # 控制最大频率为4次，大于等于cap=4次的，设置为4次
                     C_temp_s_tokens[token] = cap
             
             
             if temp_q_tokens == '':
                 temp_sim = 0
-            else:
+            else: # 计算问题token的计数器和公司介绍token中每一行的计数器的余弦相似度
                 temp_sim = counter_cosine_similarity(C_temp_q_tokens,C_temp_s_tokens)
             list_sim.append(temp_sim)
             
@@ -117,7 +119,7 @@ for cyc in range(1000):
         max_number = []
         max_index = []
         
-        for _ in range(n):
+        for _ in range(n): # 取相似度最大的n个，n=30
             number = max(t)
             index = t.index(number)
             t[index] = 0

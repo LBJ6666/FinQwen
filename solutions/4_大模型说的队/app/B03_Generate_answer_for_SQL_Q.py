@@ -3,6 +3,9 @@ import pandas as pd
 import numpy as np
 import re
 import copy
+
+# 根据例子的问题和SQL查询结果和答案的模版 prompt，给定问题和SQL查询结果，让LLM生成答案
+
 n = 4
 deny_list = ['0','1','2','3','4','5','6','7','8','9','，','？','。',
              '一','二','三','四','五','六','七','八','九','零','十',
@@ -35,13 +38,20 @@ model.generation_config = GenerationConfig.from_pretrained(model_dir,
 
 print('B03_model_loaded')
 
-deny_token_list = list()
+deny_token_list = list() # 特殊词转为token
 for word in deny_list:
     temp_tokens = tokenizer(word)
     temp_tokens = temp_tokens['input_ids']
     deny_token_list = deny_token_list + temp_tokens
 
 def get_prompt_v33(question,data,index_list):
+    '''
+
+    :param question: 真实问题
+    :param data: SQL执行结果
+    :param index_list: 相似问题的索引
+    :return: 根据问题，把执行SQL结果，生成答案的prompt
+    '''
     
     Examples = '以下是一些例子：'
     for index in index_list:
@@ -77,8 +87,8 @@ example_token_list = list()
 
 for cyc in range(len(SQL_examples_file)):
     example_question_list.append(SQL_examples_file[cyc:cyc+1]['问题'][cyc])
-    example_data_list.append(SQL_examples_file[cyc:cyc+1]['资料'][cyc])
-    example_FA_list.append(SQL_examples_file[cyc:cyc+1]['FA'][cyc])
+    example_data_list.append(SQL_examples_file[cyc:cyc+1]['资料'][cyc]) # 例子问题中的查询结果
+    example_FA_list.append(SQL_examples_file[cyc:cyc+1]['FA'][cyc]) #  例子问题中结果的答案
     temp_tokens = tokenizer(SQL_examples_file[cyc:cyc+1]['问题'][cyc])
     temp_tokens = temp_tokens['input_ids']
     temp_tokens2 = [x for x in temp_tokens if x not in deny_token_list]
@@ -101,27 +111,27 @@ for cyc in range(1000):
     if cyc % 50 == 0:
         print(cyc)
     temp_question = data_file[cyc:cyc+1]['问题'][cyc]
-    class_ans = data_file2[cyc:cyc+1]['分类'][cyc]
-    SQL_search_result = data_file[cyc:cyc+1]['执行结果'][cyc]
+    class_ans = data_file2[cyc:cyc+1]['分类'][cyc] # sql 或者 text
+    SQL_search_result = data_file[cyc:cyc+1]['执行结果'][cyc] # 根据LLM输出的SQL执行的结果
     temp_FA = temp_question
     if class_ans != 'SQL':
-        temp_FA = 'N_A'
+        temp_FA = 'N_A' # 如果不是sql任务，把temp_FA设置为空
     elif SQL_search_result != 'N_A':
         if len(SQL_search_result) > 0:
-            if len(SQL_search_result) > 250:
+            if len(SQL_search_result) > 250: # SQL执行结果超出250截断
                 SQL_search_result = SQL_search_result[0:250]
             temp_question = data_file[cyc:cyc+1]['问题'][cyc]
             date_list =  re.findall(pattern1,temp_question)
             temp_question2_for_search = temp_question
             for t_date in date_list:
-                temp_question2_for_search.replace(t_date,' ')
+                temp_question2_for_search.replace(t_date,' ') # 把问题中的日期删除
             temp_tokens = tokenizer(temp_question2_for_search)
             temp_tokens = temp_tokens['input_ids']
             temp_tokens2 = [x for x in temp_tokens if x not in deny_token_list]
             temp_tokens = temp_tokens2
             #计算与已有问题的相似度
             similarity_list = list()
-            for cyc2 in range(len(SQL_examples_file)):
+            for cyc2 in range(len(SQL_examples_file)): # 计算真实问题和例子之前的相似度
                 similarity_list.append(len(set(temp_tokens) &set(example_token_list[cyc2]))/ (len(set(temp_tokens))+len(set(example_token_list[cyc2])) ))
 
             #求与第X个问题相似的问题
@@ -130,7 +140,7 @@ for cyc in range(1000):
             # 求m个最大的数值及其索引
             max_number = []
             max_index = []
-            for _ in range(n):
+            for _ in range(n): # 找出top_n个相似度的位置，这里n=4
                 number = max(t)
                 index = t.index(number)
                 t[index] = 0
